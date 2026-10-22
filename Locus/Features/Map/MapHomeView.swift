@@ -126,11 +126,6 @@ struct MapHomeView: View {
             guard let url = note.object as? URL else { return }
             importGPX(url)
         }
-        .fileImporter(isPresented: $showGPXImporter, allowedContentTypes: [.xml, .data], allowsMultipleSelection: false) { result in
-            if case .success(let urls) = result, let url = urls.first {
-                importGPX(url)
-            }
-        }
         .sheet(isPresented: $showRouteSheet) {
             RoutePlannerSheet(
                 start: $routeStart,
@@ -147,6 +142,12 @@ struct MapHomeView: View {
                 }
             )
             .presentationDetents([.medium, .large])
+            // Attached to the sheet: the map view can't present while this sheet is up.
+            .fileImporter(isPresented: $showGPXImporter, allowedContentTypes: [.xml, .data], allowsMultipleSelection: false) { result in
+                if case .success(let urls) = result, let url = urls.first {
+                    importGPX(url)
+                }
+            }
         }
     }
 
@@ -368,6 +369,13 @@ struct MapHomeView: View {
                     routeCoords = coords
                     isRouting = false
                 }
+            } catch let error as MKError where error.code == .directionsNotFound {
+                // Apple Maps has no road data for some regions / travel modes.
+                await MainActor.run {
+                    routeCoords = RouteBuilder.sample(coordinates: [start, end], every: 10)
+                    isRouting = false
+                    session.lastError = "\(error.localizedDescription). Using a straight line instead — draw a path or import a GPX file for a custom route."
+                }
             } catch {
                 await MainActor.run {
                     isRouting = false
@@ -412,8 +420,10 @@ struct MapHomeView: View {
             try gpx.data(using: .utf8)?.write(to: url)
             let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
             if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               let root = scene.keyWindow?.rootViewController {
-                root.present(av, animated: true)
+               var top = scene.keyWindow?.rootViewController {
+                // Present above the Routes sheet, not from the root that is already presenting it.
+                while let presented = top.presentedViewController { top = presented }
+                top.present(av, animated: true)
             }
         } catch {
             session.lastError = error.localizedDescription

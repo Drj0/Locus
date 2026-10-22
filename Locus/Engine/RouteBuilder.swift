@@ -54,7 +54,8 @@ enum GPXCodec {
         let data = try Data(contentsOf: url)
         let text = String(decoding: data, as: UTF8.self)
         var coords: [CLLocationCoordinate2D] = []
-        let pattern = #"lat="([^"]+)"[^>]*lon="([^"]+)""#
+        // \b skips <bounds minlat=… maxlon=…>; GPX allows either quote style.
+        let pattern = #"\blat=["']([^"']+)["'][^>]*\blon=["']([^"']+)["']"#
         let regex = try NSRegularExpression(pattern: pattern)
         let range = NSRange(text.startIndex..<text.endIndex, in: text)
         regex.enumerateMatches(in: text, range: range) { match, _, _ in
@@ -67,7 +68,7 @@ enum GPXCodec {
         }
         // Also support lon before lat
         if coords.isEmpty {
-            let alt = #"lon="([^"]+)"[^>]*lat="([^"]+)""#
+            let alt = #"\blon=["']([^"']+)["'][^>]*\blat=["']([^"']+)["']"#
             let altRegex = try NSRegularExpression(pattern: alt)
             altRegex.enumerateMatches(in: text, range: range) { match, _, _ in
                 guard let match,

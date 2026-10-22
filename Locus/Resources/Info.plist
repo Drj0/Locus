@@ -80,7 +80,7 @@
 			<string>Alternate</string>
 			<key>LSItemContentTypes</key>
 			<array>
-				<string>com.topografixix.gpx</string>
+				<string>com.topografix.gpx</string>
 				<string>public.xml</string>
 			</array>
 		</dict>
