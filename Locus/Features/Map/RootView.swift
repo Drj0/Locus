@@ -12,6 +12,15 @@ struct RootView: View {
         // Spacer layer that can steal / pass map taps through the tray.
         ZStack(alignment: .bottom) {
             MapHomeView()
+                .alert("Turn Off Mobile Data", isPresented: Binding(
+                    get: { session.awaitingDataOff },
+                    set: { _ in }  // the buttons below decide
+                )) {
+                    Button("Try Again") { session.retryAfterDataOff() }
+                    Button("Cancel", role: .cancel) { session.cancelDataOffWait() }
+                } message: {
+                    Text("iOS won’t open the developer tunnel while mobile data is your only connection. Keep LocalDevVPN connected and turn Mobile Data off (or Airplane Mode on) for a few seconds. Locus teleports by itself, then you can turn it back on.")
+                }
 
             BottomControlsView(
                 showSettings: $showSettings,

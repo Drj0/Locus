@@ -42,7 +42,10 @@ enum LocationEngineError: LocalizedError {
 
 /// Thin Swift wrapper around idevice’s DVT location simulation (injects into locationd).
 enum LocationEngine {
-    private static let queue = DispatchQueue(label: "com.chrismack.locus.location", qos: .userInitiated)
+    /// idevice blocks this queue on tokio worker threads that run at Default QoS. Calls hop
+    /// here asynchronously so the main thread never parks on them (priority inversion), and
+    /// the queue matches their QoS so the wait itself isn't an inversion either.
+    private static let queue = DispatchQueue(label: "com.chrismack.locus.location", qos: .default)
 
     private static var adapter: OpaquePointer?
     private static var handshake: OpaquePointer?
@@ -63,29 +66,29 @@ enum LocationEngine {
 
     static var isSessionActive: Bool { locationSimulation != nil }
 
-    static func set(latitude: Double, longitude: Double, pairingPath: String, deviceIP: String) -> Result<Void, LocationEngineError> {
-        var result: Result<Void, LocationEngineError> = .failure(.locationSet)
-        queue.sync {
-            tunnelErrorDetail = nil
-            let code = setLocked(latitude: latitude, longitude: longitude, pairingPath: pairingPath, deviceIP: deviceIP)
-            if code == ok {
-                result = .success(())
-            } else if code == tunnelCreate {
-                result = .failure(.tunnelCreate(tunnelErrorDetail))
-            } else {
-                result = .failure(.from(code: code))
+    static func set(latitude: Double, longitude: Double, pairingPath: String, deviceIP: String) async -> Result<Void, LocationEngineError> {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                tunnelErrorDetail = nil
+                let code = setLocked(latitude: latitude, longitude: longitude, pairingPath: pairingPath, deviceIP: deviceIP)
+                if code == ok {
+                    continuation.resume(returning: .success(()))
+                } else if code == tunnelCreate {
+                    continuation.resume(returning: .failure(.tunnelCreate(tunnelErrorDetail)))
+                } else {
+                    continuation.resume(returning: .failure(.from(code: code)))
+                }
             }
         }
-        return result
     }
 
-    static func clear() -> Result<Void, LocationEngineError> {
-        var result: Result<Void, LocationEngineError> = .failure(.notActive)
-        queue.sync {
-            let code = clearLocked()
-            result = code == ok ? .success(()) : .failure(.from(code: code))
+    static func clear() async -> Result<Void, LocationEngineError> {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                let code = clearLocked()
+                continuation.resume(returning: code == ok ? .success(()) : .failure(.from(code: code)))
+            }
         }
-        return result
     }
 
     private static func cleanup() {
@@ -174,12 +177,13 @@ enum LocationEngine {
         return ok
     }
 
+    /// Clears the spoof but keeps the tunnel open: on mobile data a new tunnel can't be
+    /// opened, so the next teleport reuses this one.
     private static func clearLocked() -> Int32 {
         guard let locationSimulation else { return locationClear }
-        let err = location_simulation_clear(locationSimulation)
-        cleanup()
-        if let err {
+        if let err = location_simulation_clear(locationSimulation) {
             idevice_error_free(err)
+            cleanup()
             return locationClear
         }
         return ok

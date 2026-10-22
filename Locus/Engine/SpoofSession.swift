@@ -1,6 +1,7 @@
 import CoreLocation
 import Foundation
 import MapKit
+import Network
 import UIKit
 import UserNotifications
 
@@ -78,6 +79,8 @@ final class SpoofSession: ObservableObject {
     @Published var lastError: String?
     @Published var isBusy = false
     @Published var joystickActive = false
+    /// A teleport failed because mobile data is the only route; it runs once data is off.
+    @Published var awaitingDataOff = false
 
     @Published var favorites: [SavedPlace] = []
     @Published var recents: [SavedPlace] = []
@@ -91,6 +94,13 @@ final class SpoofSession: ObservableObject {
     private var backgroundTask = UIBackgroundTaskIdentifier.invalid
     private var joystickVector: CGVector = .zero
     private let locationKeeper = BackgroundKeepAlive()
+    /// Bumped by Stop so an engine call that finishes afterwards doesn't revive the session.
+    private var generation = 0
+    private let pathMonitor = NWPathMonitor()
+    /// Mobile data is up with no Wi‑Fi / Ethernet. iOS refuses new developer tunnels then.
+    private var cellularOnly = false
+    private var pendingTeleport: (coordinate: CLLocationCoordinate2D, markRecent: Bool)?
+    private weak var activePairing: PairingStore?
 
     private let favoritesKey = "locus.favorites"
     private let recentsKey = "locus.recents"
@@ -100,6 +110,43 @@ final class SpoofSession: ObservableObject {
         favorites = SavedPlace.load(key: favoritesKey)
         recents = SavedPlace.load(key: recentsKey)
         recentSearches = SavedPlace.load(key: recentSearchesKey)
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            let types = path.availableInterfaces.map(\.type)
+            let cellularOnly = types.contains(.cellular) && !types.contains(.wifi) && !types.contains(.wiredEthernet)
+            Task { @MainActor in self?.routeChanged(cellularOnly: cellularOnly) }
+        }
+        pathMonitor.start(queue: .main)
+    }
+
+    func retryAfterDataOff() {
+        guard let pending = pendingTeleport, let pairing = activePairing else { return }
+        // Let the alert dismiss first so a repeat failure can present it again.
+        awaitingDataOff = false
+        Task { [weak self] in
+            await self?.apply(pending.coordinate, pairing: pairing, markRecent: pending.markRecent)
+        }
+    }
+
+    func cancelDataOffWait() {
+        awaitingDataOff = false
+        pendingTeleport = nil
+    }
+
+    private func routeChanged(cellularOnly: Bool) {
+        let freed = self.cellularOnly && !cellularOnly
+        self.cellularOnly = cellularOnly
+        guard freed else { return }
+        Task { @MainActor [weak self] in
+            // Give the device a moment to bring its pairing listener up.
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            guard let self, !self.cellularOnly, let pairing = self.activePairing else { return }
+            if self.pendingTeleport != nil {
+                self.retryAfterDataOff()
+            } else if self.status.isDropped, let sim = self.simulated {
+                self.status = .reconnecting
+                await self.apply(sim, pairing: pairing, markRecent: false)
+            }
+        }
     }
 
     var isSpoofing: Bool {
@@ -114,7 +161,7 @@ final class SpoofSession: ObservableObject {
             return
         }
         pin = coordinate
-        apply(coordinate, pairing: pairing, markRecent: true)
+        Task { await apply(coordinate, pairing: pairing, markRecent: true) }
     }
 
     func stop(pairing: PairingStore) {
@@ -123,8 +170,14 @@ final class SpoofSession: ObservableObject {
         stopJoystick()
         stopResend()
         stopHealth()
+        // Results of teleports still in flight belong to the session being stopped.
+        generation += 1
+        Task { await finishStop() }
+    }
+
+    private func finishStop() async {
         isBusy = true
-        let result = LocationEngine.clear()
+        let result = await LocationEngine.clear()
         isBusy = false
         switch result {
         case .success:
@@ -162,7 +215,7 @@ final class SpoofSession: ObservableObject {
             return
         }
         if simulated == nil {
-            apply(start, pairing: pairing, markRecent: false)
+            Task { await apply(start, pairing: pairing, markRecent: false) }
         }
         joystickActive = true
         joystickTimer?.invalidate()
@@ -192,9 +245,7 @@ final class SpoofSession: ObservableObject {
         routeTask = Task { [weak self] in
             guard let self else { return }
             var previous = coordinates[0]
-            await MainActor.run {
-                self.apply(previous, pairing: pairing, markRecent: true)
-            }
+            await self.apply(previous, pairing: pairing, markRecent: true)
             for next in coordinates.dropFirst() {
                 if Task.isCancelled { break }
                 let distance = CLLocation(latitude: previous.latitude, longitude: previous.longitude)
@@ -212,9 +263,7 @@ final class SpoofSession: ObservableObject {
                     )
                     let delay = stepMeters / speed
                     try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                    await MainActor.run {
-                        self.apply(coord, pairing: pairing, markRecent: false)
-                    }
+                    await self.apply(coord, pairing: pairing, markRecent: false)
                 }
                 previous = next
             }
@@ -318,25 +367,32 @@ final class SpoofSession: ObservableObject {
         return false
     }
 
-    private func apply(_ coordinate: CLLocationCoordinate2D, pairing: PairingStore, markRecent: Bool) {
+    private func apply(_ coordinate: CLLocationCoordinate2D, pairing: PairingStore, markRecent: Bool) async {
         let wasActive = status == .active
+        let generation = generation
+        activePairing = pairing
         if status == .idle || status.isDropped {
             status = .connecting
         }
         isBusy = true
-        let result = LocationEngine.set(
+        let result = await LocationEngine.set(
             latitude: coordinate.latitude,
             longitude: coordinate.longitude,
             pairingPath: pairing.pairingPath,
             deviceIP: TunnelConfig.targetIP
         )
         isBusy = false
+        guard generation == self.generation else { return }
         switch result {
         case .success:
             simulated = coordinate
             pin = coordinate
             status = .active
             lastError = nil
+            if pendingTeleport != nil {
+                cancelDataOffWait()
+                lastError = "Spoofing. You can turn Mobile Data back on — the session keeps running."
+            }
             beginBackground()
             locationKeeper.start()
             startResend(pairing: pairing)
@@ -345,22 +401,34 @@ final class SpoofSession: ObservableObject {
                 pushRecent(coordinate)
             }
         case .failure(let error):
-            lastError = error.localizedDescription
+            var blockedByMobileData = false
+            if case .tunnelCreate = error { blockedByMobileData = cellularOnly }
+            let message = blockedByMobileData ? Self.mobileDataHint : error.localizedDescription
             if simulated != nil {
+                lastError = message
                 // Notify only when a live spoof drops. Retries (health check, joystick ticks,
                 // route steps) start from .dropped / .reconnecting and would otherwise repeat it.
                 if wasActive {
-                    postDropNotification(error.localizedDescription)
+                    postDropNotification(message)
                 }
-                status = .dropped(error.localizedDescription)
+                status = .dropped(message)
+            } else if blockedByMobileData {
+                pendingTeleport = (coordinate, markRecent)
+                awaitingDataOff = true
+                status = .idle
             } else {
+                lastError = message
+                cancelDataOffWait()
                 status = .idle
             }
         }
     }
 
+    private static let mobileDataHint = "Mobile data blocks the developer tunnel. Keep LocalDevVPN connected and turn Mobile Data off (or Airplane Mode on) for a few seconds — Locus connects by itself, then turn it back on."
+
     private func tickJoystick(pairing: PairingStore) {
-        guard joystickActive, let current = simulated else { return }
+        // Skip a tick while the engine is still busy so moves don't queue up behind it.
+        guard joystickActive, !isBusy, let current = simulated else { return }
         let magnitude = hypot(joystickVector.dx, joystickVector.dy)
         guard magnitude > 0.08 else { return }
         let nx = joystickVector.dx / magnitude
@@ -369,7 +437,7 @@ final class SpoofSession: ObservableObject {
         let dt = 0.25
         let meters = speed * dt
         let next = offset(coordinate: current, eastMeters: nx * meters, northMeters: ny * meters)
-        apply(next, pairing: pairing, markRecent: false)
+        Task { await apply(next, pairing: pairing, markRecent: false) }
     }
 
     private func startResend(pairing: PairingStore) {
@@ -377,7 +445,7 @@ final class SpoofSession: ObservableObject {
         resendTimer = Timer.scheduledTimer(withTimeInterval: 8, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self, let sim = self.simulated else { return }
-                let result = LocationEngine.set(
+                let result = await LocationEngine.set(
                     latitude: sim.latitude,
                     longitude: sim.longitude,
                     pairingPath: pairing.pairingPath,
@@ -405,10 +473,10 @@ final class SpoofSession: ObservableObject {
                 guard let self, let sim = self.simulated else { return }
                 if case .dropped = self.status {
                     self.status = .reconnecting
-                    self.apply(sim, pairing: pairing, markRecent: false)
+                    await self.apply(sim, pairing: pairing, markRecent: false)
                 } else if !LocationEngine.isSessionActive, self.isSpoofing {
                     self.status = .reconnecting
-                    self.apply(sim, pairing: pairing, markRecent: false)
+                    await self.apply(sim, pairing: pairing, markRecent: false)
                 }
             }
         }
