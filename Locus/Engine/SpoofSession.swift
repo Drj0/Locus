@@ -186,7 +186,7 @@ final class SpoofSession: ObservableObject {
             endBackground()
             // Keep location updates running so the map puck / locate button
             // can return to the real GPS fix (not the leftover pin).
-            locationKeeper.start()
+            locationKeeper.start(inBackground: false)
         case .failure(let error):
             lastError = error.localizedDescription
             status = .dropped(error.localizedDescription)
@@ -201,7 +201,7 @@ final class SpoofSession: ObservableObject {
 
     /// Start lightweight GPS updates for the map puck / locate button.
     func startLocationUpdates() {
-        locationKeeper.start()
+        locationKeeper.start(inBackground: isSpoofing)
     }
 
     func startJoystick(pairing: PairingStore) {
@@ -394,7 +394,7 @@ final class SpoofSession: ObservableObject {
                 lastError = "Spoofing. You can turn Mobile Data back on — the session keeps running."
             }
             beginBackground()
-            locationKeeper.start()
+            locationKeeper.start(inBackground: true)
             startResend(pairing: pairing)
             startHealth(pairing: pairing)
             if markRecent {

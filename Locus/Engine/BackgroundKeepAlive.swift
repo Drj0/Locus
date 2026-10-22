@@ -10,11 +10,14 @@ final class BackgroundKeepAlive: NSObject, CLLocationManagerDelegate {
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyThreeKilometers
         manager.pausesLocationUpdatesAutomatically = false
-        manager.allowsBackgroundLocationUpdates = true
+        manager.allowsBackgroundLocationUpdates = false
         manager.showsBackgroundLocationIndicator = false
     }
 
-    func start() {
+    /// Background updates keep Locus running while a spoof is live. Otherwise only the map
+    /// puck needs a fix, so iOS is left free to suspend the app instead of running GPS forever.
+    func start(inBackground: Bool) {
+        manager.allowsBackgroundLocationUpdates = inBackground
         manager.requestAlwaysAuthorization()
         manager.startUpdatingLocation()
     }
