@@ -37,119 +37,199 @@ struct RootView: View {
     }
 }
 
-struct StatusBarView: View {
-    @EnvironmentObject private var session: SpoofSession
-    @EnvironmentObject private var pairing: PairingStore
+/// LocalDevVPN state, polled while the app is active. Publishes only on change.
+@MainActor
+final class TunnelMonitor: ObservableObject {
+    @Published private(set) var connected = LocalDevVPN.isConnected
+    @Published private(set) var installed = LocalDevVPN.isInstalled
+
+    func refresh() {
+        let connected = LocalDevVPN.isConnected
+        let installed = LocalDevVPN.isInstalled
+        if connected != self.connected { self.connected = connected }
+        if installed != self.installed { self.installed = installed }
+    }
+
+    /// Something the user must act on: no tunnel, or the spoof dropped.
+    func needsAttention(_ status: SpoofStatus) -> Bool {
+        !connected || status.isDropped
+    }
+}
+
+private struct TunnelMonitoring: ViewModifier {
+    @ObservedObject var monitor: TunnelMonitor
+    let status: SpoofStatus
     @Environment(\.scenePhase) private var scenePhase
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear { monitor.refresh() }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { monitor.refresh() }
+            }
+            .onChange(of: status) { _, _ in monitor.refresh() }
+            .onReceive(NotificationCenter.default.publisher(for: .NEVPNStatusDidChange)) { _ in
+                // LocalDevVPN connection changes show up here even though we don’t own the VPN.
+                monitor.refresh()
+            }
+            .task(id: scenePhase) {
+                guard scenePhase == .active else { return }
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    monitor.refresh()
+                }
+            }
+    }
+}
+
+extension View {
+    func monitoringTunnel(_ monitor: TunnelMonitor, status: SpoofStatus) -> some View {
+        modifier(TunnelMonitoring(monitor: monitor, status: status))
+    }
+}
+
+/// Full-width, tinted: shown only when the tunnel is off or the spoof dropped.
+struct VPNAttentionBanner: View {
+    @EnvironmentObject private var session: SpoofSession
+    @ObservedObject var monitor: TunnelMonitor
     @Binding var expanded: Bool
 
-    @State private var tunnelConnected = LocalDevVPN.isConnected
-    @State private var localDevVPNInstalled = LocalDevVPN.isInstalled
-
-    private var color: Color {
-        switch session.status {
-        case .idle: return tunnelConnected ? LocusTheme.statusGood : LocusTheme.statusWarn
-        case .active: return LocusTheme.statusGood
-        case .connecting, .reconnecting: return LocusTheme.statusWarn
-        case .dropped: return LocusTheme.statusBad
-        }
-    }
+    private var tint: Color { session.status.isDropped ? LocusTheme.statusBad : LocusTheme.statusWarn }
 
     private var title: String {
+        monitor.connected ? "Location spoof dropped" : "LocalDevVPN is off"
+    }
+
+    private var subtitle: String {
+        if !monitor.connected {
+            return session.isSpoofing ? "Spoofing paused — reconnect to resume" : "Connect it to teleport"
+        }
+        return "Locus keeps retrying · tap for details"
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { expanded.toggle() }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.shield.fill")
+                        .font(.title3)
+                        .foregroundStyle(tint)
+                        .symbolEffect(.pulse, options: .repeating, isActive: !expanded)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(title)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.down")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(expanded ? 180 : 0))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(title). \(subtitle)")
+            .accessibilityHint(expanded ? "Hides connection details" : "Shows connection details")
+
+            if !monitor.connected {
+                Button(monitor.installed ? "Connect" : "Get") {
+                    LocalDevVPN.openOrInstall()
+                }
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(.black)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Capsule().fill(LocusTheme.accent))
+                .contentShape(Capsule())
+                .buttonStyle(.plain)
+                .accessibilityLabel(monitor.installed ? "Connect LocalDevVPN" : "Get LocalDevVPN")
+            }
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 8)
+        .padding(.vertical, 8)
+        .locusGlass(.regular, tint: tint.opacity(0.18), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(tint.opacity(0.45), lineWidth: 1))
+        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+/// Icon-only: shown beside the locate button while the tunnel is fine.
+struct VPNStatusChip: View {
+    @EnvironmentObject private var session: SpoofSession
+    @Binding var expanded: Bool
+
+    private var isBusy: Bool {
+        session.status == .connecting || session.status == .reconnecting
+    }
+
+    private var label: String {
         switch session.status {
-        case .idle: return tunnelConnected ? "VPN Connected" : "Connect LocalDevVPN"
-        case .connecting: return "Connecting…"
-        case .active: return "Spoofing"
-        case .reconnecting: return "Reconnecting…"
-        case .dropped: return "Disconnected"
+        case .active: return "LocalDevVPN connected, spoofing"
+        case .connecting: return "LocalDevVPN connected, starting spoof"
+        case .reconnecting: return "LocalDevVPN connected, reconnecting spoof"
+        default: return "LocalDevVPN connected"
         }
     }
+
+    var body: some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { expanded.toggle() }
+        } label: {
+            Image(systemName: isBusy ? "shield.fill" : "checkmark.shield.fill")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(isBusy ? LocusTheme.statusWarn : LocusTheme.statusGood)
+                .symbolEffect(.pulse, options: .repeating, isActive: isBusy)
+                .frame(width: 48, height: 48)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .locusGlass(.interactive, tint: expanded ? LocusTheme.accent.opacity(0.35) : nil, in: Circle())
+        .contentShape(Circle())
+        .accessibilityLabel(label)
+        .accessibilityHint(expanded ? "Hides connection details" : "Shows connection details")
+    }
+}
+
+struct VPNStatusDetails: View {
+    @EnvironmentObject private var session: SpoofSession
+    @EnvironmentObject private var pairing: PairingStore
+    @ObservedObject var monitor: TunnelMonitor
 
     private var locationText: String {
         switch session.status {
         case .idle: return "Real location"
-        case .connecting: return "Connecting…"
+        case .connecting: return "Starting…"
         case .active: return "Spoofing"
         case .reconnecting: return "Reconnecting…"
         case .dropped: return "Dropped"
         }
     }
 
+    private var locationTint: Color? {
+        switch session.status {
+        case .idle: return nil
+        case .active: return LocusTheme.statusGood
+        case .connecting, .reconnecting: return LocusTheme.statusWarn
+        case .dropped: return LocusTheme.statusBad
+        }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { expanded.toggle() }
-            } label: {
-                pill
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Status: \(title)")
-            .accessibilityHint(expanded ? "Hides connection details" : "Shows connection details")
-
-            if expanded {
-                details
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .onAppear { refreshTunnel() }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active { refreshTunnel() }
-        }
-        .onChange(of: session.status) { _, _ in
-            refreshTunnel()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .NEVPNStatusDidChange)) { _ in
-            // LocalDevVPN connection changes show up here even though we don’t own the VPN.
-            refreshTunnel()
-        }
-        .task(id: scenePhase) {
-            guard scenePhase == .active else { return }
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-                refreshTunnel()
-            }
-        }
-    }
-
-    private var pill: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(color)
-                .frame(width: 8, height: 8)
-                .shadow(color: color.opacity(0.7), radius: 4)
-
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-
-            if session.status != .idle {
-                // Spoof state leads; keep the tunnel readable at a glance too.
-                Image(systemName: tunnelConnected ? "lock.shield.fill" : "lock.open.fill")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(tunnelConnected ? LocusTheme.accent : LocusTheme.statusWarn)
-                    .accessibilityHidden(true)
-            }
-
-            Image(systemName: "chevron.down")
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(.secondary)
-                .rotationEffect(.degrees(expanded ? 180 : 0))
-                .accessibilityHidden(true)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
-        .locusGlass(.clear, in: Capsule())
-        .contentShape(Capsule())
-    }
-
-    private var details: some View {
         VStack(alignment: .leading, spacing: 10) {
-            detailRow("LocalDevVPN", value: tunnelConnected ? "Connected" : "Not connected",
-                      tint: tunnelConnected ? LocusTheme.statusGood : LocusTheme.statusWarn)
+            detailRow("LocalDevVPN", value: monitor.connected ? "Connected" : "Not connected",
+                      tint: monitor.connected ? LocusTheme.statusGood : LocusTheme.statusWarn)
             detailRow("Device IP", value: TunnelConfig.targetIP, monospaced: true)
-            detailRow("Location", value: locationText, tint: session.status == .idle ? nil : color)
+            detailRow("Location", value: locationText, tint: locationTint)
             if let sim = session.simulated, session.isSpoofing {
                 detailRow("Coordinates", value: String(format: "%.5f, %.5f", sim.latitude, sim.longitude), monospaced: true)
             }
@@ -161,22 +241,6 @@ struct StatusBarView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if !tunnelConnected || session.status.isDropped {
-                Button {
-                    LocalDevVPN.openOrInstall()
-                } label: {
-                    Label(localDevVPNInstalled ? "Open LocalDevVPN" : "Get LocalDevVPN",
-                          systemImage: localDevVPNInstalled ? "lock.shield.fill" : "arrow.down.app.fill")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(.black)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(Capsule().fill(LocusTheme.accent))
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
             }
         }
         .padding(14)
@@ -191,8 +255,8 @@ struct StatusBarView: View {
         if LocalDevVPN.isOwnAddress(TunnelConfig.targetIP) {
             return "The Device IP is this iPhone’s own address (LocalDevVPN’s Tunnel IP). Enter LocalDevVPN’s Device IP in Settings."
         }
-        if !tunnelConnected {
-            return "Connect LocalDevVPN, then come back. Locus uses its Device IP (default \(TunnelConfig.defaultIP)), not the Tunnel IP — change it in Settings."
+        if !monitor.connected {
+            return "Connected but still off here? Locus needs LocalDevVPN’s Device IP (default \(TunnelConfig.defaultIP)), not its Tunnel IP — change it in Settings."
         }
         if !pairing.hasPairingFile {
             return "Import a pairing file in Settings before teleporting."
@@ -213,11 +277,6 @@ struct StatusBarView: View {
         }
         .font(.subheadline)
         .accessibilityElement(children: .combine)
-    }
-
-    private func refreshTunnel() {
-        tunnelConnected = LocalDevVPN.isConnected
-        localDevVPNInstalled = LocalDevVPN.isInstalled
     }
 }
 

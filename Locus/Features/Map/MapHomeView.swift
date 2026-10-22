@@ -23,6 +23,7 @@ struct MapHomeView: View {
     /// Set when the pin comes from search / a named place so starring keeps the title.
     @State private var pinPlaceName: String?
     @State private var statusExpanded = false
+    @StateObject private var tunnel = TunnelMonitor()
 
     private var mapStyle: MapStyle {
         switch session.mapStyleIndex {
@@ -125,6 +126,7 @@ struct MapHomeView: View {
         .onAppear {
             session.startLocationUpdates()
         }
+        .monitoringTunnel(tunnel, status: session.status)
         .onChange(of: searchFocused) { _, focused in
             if focused { withAnimation { statusExpanded = false } }
         }
@@ -172,8 +174,13 @@ struct MapHomeView: View {
     }
 
     private var topChrome: some View {
-        VStack(spacing: 10) {
-            StatusBarView(expanded: $statusExpanded)
+        let needsAttention = tunnel.needsAttention(session.status)
+        return VStack(spacing: 10) {
+            if needsAttention {
+                VPNAttentionBanner(monitor: tunnel, expanded: $statusExpanded)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                if statusExpanded { statusDetails }
+            }
 
             searchBar
 
@@ -186,12 +193,24 @@ struct MapHomeView: View {
             HStack(alignment: .center, spacing: 10) {
                 mapChromeButtons
                 Spacer(minLength: 0)
+                if !needsAttention {
+                    VPNStatusChip(expanded: $statusExpanded)
+                        .transition(.scale.combined(with: .opacity))
+                }
                 locateButton
             }
+
+            if statusExpanded && !needsAttention { statusDetails }
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 2)
         .safeAreaPadding(.top, 8)
+        .animation(.snappy, value: needsAttention)
+    }
+
+    private var statusDetails: some View {
+        VPNStatusDetails(monitor: tunnel)
+            .transition(.move(edge: .top).combined(with: .opacity))
     }
 
     private var searchBar: some View {
