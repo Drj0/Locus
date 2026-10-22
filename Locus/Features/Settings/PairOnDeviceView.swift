@@ -147,6 +147,12 @@ struct PairOnDeviceView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
+                if let problem = host.advertisingProblem {
+                    Text(problem)
+                        .font(.caption)
+                        .foregroundStyle(LocusTheme.statusWarn)
+                        .multilineTextAlignment(.center)
+                }
             case .deviceConnected:
                 ProgressView()
                 Text("iPhone connected")

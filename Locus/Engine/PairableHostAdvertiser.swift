@@ -11,6 +11,8 @@ final class PairableHostAdvertiser {
     private var activeRelay: RelayPipe?
     private(set) var publishedPort: UInt16 = 0
     private var rustLoopbackPort: UInt16 = 0
+    /// Listener state on the main queue, so a stalled "Waiting for Settings…" can explain itself.
+    var onStateChange: (@MainActor (NWListener.State) -> Void)?
 
     func publish(
         port: UInt16,
@@ -59,6 +61,7 @@ final class PairableHostAdvertiser {
                 default:
                     break
                 }
+                DispatchQueue.main.async { self?.onStateChange?(state) }
             }
 
             listener.newConnectionHandler = { [weak self] connection in

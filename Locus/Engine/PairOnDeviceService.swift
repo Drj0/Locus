@@ -3,6 +3,7 @@ import idevice
 import UIKit
 import UserNotifications
 import CoreLocation
+import Network
 
 /// Runs idevice's iOS 27+ pairable-host flow on-device.
 ///
@@ -23,6 +24,8 @@ final class PairOnDeviceService: ObservableObject {
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var pin: String?
     @Published private(set) var debugPort: UInt16?
+    /// Why Developer Mode may not see Locus yet (listener waiting, e.g. Local Network denied).
+    @Published private(set) var advertisingProblem: String?
 
     private var worker: Thread?
     private let callbackBox = PairCallbackBox()
@@ -43,7 +46,9 @@ final class PairOnDeviceService: ObservableObject {
         phase = .advertising
         pin = nil
         debugPort = nil
+        advertisingProblem = nil
         callbackBox.owner = self
+        advertiser.onStateChange = { [weak self] state in self?.handleListenerState(state) }
 
         requestNotificationPermission()
         beginKeepAlive()
@@ -80,6 +85,22 @@ final class PairOnDeviceService: ObservableObject {
         phase = .idle
         pin = nil
         debugPort = nil
+        advertisingProblem = nil
+    }
+
+    private func handleListenerState(_ state: NWListener.State) {
+        guard case .advertising = phase else { return }
+        let hint = "Check Settings › Privacy & Security › Local Network › Locus. Inside LiveContainer, Bonjour permissions come from the host app, so on-device pairing may not work there; import an RPPairing file instead."
+        switch state {
+        case .ready:
+            advertisingProblem = nil
+        case .waiting(let error):
+            advertisingProblem = "Developer Mode can’t see Locus yet (\(error.localizedDescription)). \(hint)"
+        case .failed(let error):
+            handleFailure("Couldn’t advertise to Developer Mode (\(error.localizedDescription)). \(hint)")
+        default:
+            break
+        }
     }
 
     fileprivate func handleListening(
