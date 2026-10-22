@@ -23,6 +23,13 @@ enum LocalDevVPN {
         return ipv4Interfaces().contains { $0.name.hasPrefix("utun") && $0.address == source }
     }
 
+    /// True when `ip` belongs to this iPhone, e.g. LocalDevVPN's Tunnel IP typed in
+    /// where its Device IP belongs.
+    static func isOwnAddress(_ ip: String) -> Bool {
+        let ip = TunnelConfig.normalized(ip)
+        return ipv4Interfaces().contains { $0.address == ip }
+    }
+
     static func openInstalled() {
         UIApplication.shared.open(enableURL)
     }

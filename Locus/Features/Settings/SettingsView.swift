@@ -71,6 +71,11 @@ struct SettingsView: View {
                         .onSubmit {
                             TunnelConfig.setTargetIP(tunnelIP)
                         }
+                    if LocalDevVPN.isOwnAddress(tunnelIP) {
+                        Text("That’s this iPhone’s own address (LocalDevVPN’s Tunnel IP). Enter LocalDevVPN’s Device IP instead.")
+                            .font(.footnote)
+                            .foregroundStyle(LocusTheme.statusWarn)
+                    }
                     LabeledContent("Status") {
                         Text(LocalDevVPN.isConnected ? "Connected" : "Not connected")
                             .foregroundStyle(LocalDevVPN.isConnected ? LocusTheme.statusGood : LocusTheme.statusWarn)
