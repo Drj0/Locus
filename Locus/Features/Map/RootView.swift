@@ -280,16 +280,24 @@ struct BottomControlsView: View {
                 Button {
                     withAnimation(.snappy) { showModes.toggle() }
                 } label: {
-                    Image(systemName: session.travelMode.icon)
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(showModes ? .black : LocusTheme.accent)
-                        .frame(width: 44, height: 44)
-                        .background(Circle().fill(showModes ? LocusTheme.accent : Color.primary.opacity(0.08)))
-                        .contentShape(Circle())
+                    // Chevron signals the picker it opens; flips while open.
+                    HStack(spacing: 4) {
+                        Image(systemName: session.travelMode.icon)
+                            .font(.body.weight(.semibold))
+                        Image(systemName: "chevron.up")
+                            .font(.caption2.weight(.bold))
+                            .rotationEffect(.degrees(showModes ? 180 : 0))
+                    }
+                    .foregroundStyle(showModes ? .black : .primary)
+                    .padding(.horizontal, 12)
+                    .frame(height: 44)
+                    .background(Capsule().fill(showModes ? LocusTheme.accent : Color.primary.opacity(0.08)))
+                    .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Travel mode")
                 .accessibilityValue(session.travelMode.title)
+                .accessibilityHint(showModes ? "Hides travel modes" : "Shows travel modes")
 
                 Button {
                     if session.joystickActive {
