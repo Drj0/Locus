@@ -54,6 +54,10 @@ Start a teleport on Wi‑Fi first; the session can keep working on cellular afte
 
 The text in parentheses at the end of the error is idevice’s own reason. Include it when filing an issue.
 
+### Apple Watch
+
+Locus changes the iPhone’s location only. Accessories that report through the iPhone (e.g. AirPods in Find My) follow it, but Apple Watch runs its own location service, and most models have their own GPS, so the Watch and its apps keep showing your real location. Locus has no developer tunnel to watchOS and can’t change that.
+
 ### Using another VPN
 
 iOS runs only one VPN at a time, so LocalDevVPN and a regular VPN can’t both be on, and turning LocalDevVPN off ends the spoof. If you need a VPN too, use one client that does both: some proxy apps (e.g. Clash Mi / sing-box setups made for SideStore) can loop back `10.7.0.1` while routing other traffic through your server. Enter that loopback address as Locus’s Device IP. Locus doesn’t test these setups.
