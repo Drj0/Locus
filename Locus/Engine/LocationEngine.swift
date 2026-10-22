@@ -4,7 +4,7 @@ import idevice
 enum LocationEngineError: LocalizedError {
     case invalidIP
     case pairingRead
-    case tunnelCreate
+    case tunnelCreate(String?)
     case remoteServer
     case simulationCreate
     case locationSet
@@ -15,7 +15,9 @@ enum LocationEngineError: LocalizedError {
         switch self {
         case .invalidIP: return "Device IP is invalid. Check Settings → Tunnel (use LocalDevVPN’s Device IP, usually 10.7.0.1)."
         case .pairingRead: return "Could not read the RPPairing file. Generate one with idevice_pair in RPPairing mode."
-        case .tunnelCreate: return "Could not open the developer tunnel. Is LocalDevVPN connected on Wi‑Fi, and does Settings → Tunnel match its Device IP (not its Tunnel IP)?"
+        case .tunnelCreate(let detail):
+            let message = "Could not open the developer tunnel. Is LocalDevVPN connected on Wi‑Fi, and does Settings → Tunnel match its Device IP (not its Tunnel IP)?"
+            return detail.map { "\(message) (\($0))" } ?? message
         case .remoteServer: return "Connected to the tunnel but RemoteXPC handshake failed."
         case .simulationCreate: return "Could not open Apple’s location simulation service."
         case .locationSet: return "Failed to set simulated coordinates."
@@ -28,7 +30,7 @@ enum LocationEngineError: LocalizedError {
         switch code {
         case 1: return .invalidIP
         case 2: return .pairingRead
-        case 3: return .tunnelCreate
+        case 3: return .tunnelCreate(nil)
         case 9: return .remoteServer
         case 10: return .simulationCreate
         case 11: return .locationSet
@@ -56,13 +58,23 @@ enum LocationEngine {
     private static let locationSet: Int32 = 11
     private static let locationClear: Int32 = 12
 
+    /// idevice's message for the last tunnel failure, so users can tell causes apart.
+    private static var tunnelErrorDetail: String?
+
     static var isSessionActive: Bool { locationSimulation != nil }
 
     static func set(latitude: Double, longitude: Double, pairingPath: String, deviceIP: String) -> Result<Void, LocationEngineError> {
         var result: Result<Void, LocationEngineError> = .failure(.locationSet)
         queue.sync {
+            tunnelErrorDetail = nil
             let code = setLocked(latitude: latitude, longitude: longitude, pairingPath: pairingPath, deviceIP: deviceIP)
-            result = code == ok ? .success(()) : .failure(.from(code: code))
+            if code == ok {
+                result = .success(())
+            } else if code == tunnelCreate {
+                result = .failure(.tunnelCreate(tunnelErrorDetail))
+            } else {
+                result = .failure(.from(code: code))
+            }
         }
         return result
     }
@@ -134,6 +146,7 @@ enum LocationEngine {
             }
         }
         if let providerError {
+            tunnelErrorDetail = providerError.pointee.message.map { String(cString: $0) }
             idevice_error_free(providerError)
             cleanup()
             return tunnelCreate

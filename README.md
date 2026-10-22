@@ -46,6 +46,14 @@ Also install **[LocalDevVPN](https://apps.apple.com/us/app/localdevvpn/id6755608
 
 Start a teleport on Wi‑Fi first; the session can keep working on cellular afterward.
 
+### “Could not open the developer tunnel”
+
+1. Settings → Tunnel must hold LocalDevVPN’s **Device IP**, not its Tunnel IP.
+2. Disconnect and reconnect LocalDevVPN, then teleport again on Wi‑Fi.
+3. Some iOS 26 users report that connecting LocalDevVPN, turning on Airplane Mode, teleporting, then turning Airplane Mode off gets the tunnel up. This hasn’t been verified by Locus.
+
+The text in parentheses at the end of the error is idevice’s own reason. Include it when filing an issue.
+
 ### Using another VPN
 
 iOS runs only one VPN at a time, so LocalDevVPN and a regular VPN can’t both be on, and turning LocalDevVPN off ends the spoof. If you need a VPN too, use one client that does both: some proxy apps (e.g. Clash Mi / sing-box setups made for SideStore) can loop back `10.7.0.1` while routing other traffic through your server. Enter that loopback address as Locus’s Device IP. Locus doesn’t test these setups.
