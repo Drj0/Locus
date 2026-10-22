@@ -44,7 +44,7 @@ Locus uses the MIT-licensed [idevice](https://github.com/jkcoxson/idevice) FFI t
 
 Also install **[LocalDevVPN](https://apps.apple.com/us/app/localdevvpn/id6755608044)** (loopback tunnel), then sideload Locus. Locus targets LocalDevVPN’s **Device IP** (default `10.7.0.1`), not its **Tunnel IP** (default `10.7.1.1`).
 
-Start a teleport on Wi‑Fi first; the session can keep working on cellular afterward.
+Start a teleport on Wi‑Fi first; the session can keep working on cellular afterward. If switching networks drops the tunnel, iOS returns to your real location and Locus shows **Disconnected** while it keeps retrying. Teleport again on Wi‑Fi if it doesn’t recover.
 
 ### “Could not open the developer tunnel”
 

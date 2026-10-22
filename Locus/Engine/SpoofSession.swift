@@ -315,8 +315,11 @@ final class SpoofSession: ObservableObject {
         case .failure(let error):
             lastError = error.localizedDescription
             if simulated != nil {
+                // Health-check retries run as .reconnecting; only notify on the first drop.
+                if status != .reconnecting {
+                    postDropNotification(error.localizedDescription)
+                }
                 status = .dropped(error.localizedDescription)
-                postDropNotification(error.localizedDescription)
             } else {
                 status = .idle
             }
@@ -341,12 +344,18 @@ final class SpoofSession: ObservableObject {
         resendTimer = Timer.scheduledTimer(withTimeInterval: 8, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self, let sim = self.simulated else { return }
-                _ = LocationEngine.set(
+                let result = LocationEngine.set(
                     latitude: sim.latitude,
                     longitude: sim.longitude,
                     pairingPath: pairing.pairingPath,
                     deviceIP: TunnelConfig.targetIP
                 )
+                // The tunnel can die silently (e.g. Wi‑Fi → cellular); stop claiming "Spoofing"
+                // so the health check takes over reconnecting.
+                if case .failure(let error) = result, self.status == .active {
+                    self.status = .dropped(error.localizedDescription)
+                    self.postDropNotification(error.localizedDescription)
+                }
             }
         }
     }
