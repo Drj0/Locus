@@ -77,7 +77,10 @@ final class SpoofSession: ObservableObject {
     @Published var travelMode: TravelMode = .walk
     @Published var mapStyleIndex: Int = 0
     @Published var lastError: String?
+    /// Teleport is in progress. Published only when the Teleport button is showing (not spoofing):
+    /// joystick ticks and route steps would otherwise re-render every observer twice per step.
     @Published var isBusy = false
+    private var engineBusy = false
     @Published var joystickActive = false
     /// A teleport failed because mobile data is the only route; it runs once data is off.
     @Published var awaitingDataOff = false
@@ -374,14 +377,17 @@ final class SpoofSession: ObservableObject {
         if status == .idle || status.isDropped {
             status = .connecting
         }
-        isBusy = true
+        let showsProgress = !isSpoofing
+        engineBusy = true
+        if showsProgress { isBusy = true }
         let result = await LocationEngine.set(
             latitude: coordinate.latitude,
             longitude: coordinate.longitude,
             pairingPath: pairing.pairingPath,
             deviceIP: TunnelConfig.targetIP
         )
-        isBusy = false
+        engineBusy = false
+        if isBusy { isBusy = false }
         guard generation == self.generation else { return }
         switch result {
         case .success:
@@ -428,7 +434,7 @@ final class SpoofSession: ObservableObject {
 
     private func tickJoystick(pairing: PairingStore) {
         // Skip a tick while the engine is still busy so moves don't queue up behind it.
-        guard joystickActive, !isBusy, let current = simulated else { return }
+        guard joystickActive, !engineBusy, let current = simulated else { return }
         let magnitude = hypot(joystickVector.dx, joystickVector.dy)
         guard magnitude > 0.08 else { return }
         let nx = joystickVector.dx / magnitude
