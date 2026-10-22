@@ -22,6 +22,7 @@ struct MapHomeView: View {
     @State private var suppressNextMapTap = false
     /// Set when the pin comes from search / a named place so starring keeps the title.
     @State private var pinPlaceName: String?
+    @State private var statusExpanded = false
 
     private var mapStyle: MapStyle {
         switch session.mapStyleIndex {
@@ -107,6 +108,11 @@ struct MapHomeView: View {
                 .mapControlVisibility(.hidden)
                 .onTapGesture { point in
                     searchFocused = false
+                    // A tap that only closes the status details shouldn't also drop a pin.
+                    if statusExpanded {
+                        withAnimation { statusExpanded = false }
+                        return
+                    }
                     guard !suppressNextMapTap, !isDraggingPin else { return }
                     pinSelected = false
                     placePin(at: point, proxy: proxy)
@@ -118,6 +124,9 @@ struct MapHomeView: View {
         }
         .onAppear {
             session.startLocationUpdates()
+        }
+        .onChange(of: searchFocused) { _, focused in
+            if focused { withAnimation { statusExpanded = false } }
         }
         .onChange(of: session.pin?.latitude) { _, newValue in
             if newValue == nil { pinSelected = false }
@@ -164,7 +173,7 @@ struct MapHomeView: View {
 
     private var topChrome: some View {
         VStack(spacing: 10) {
-            StatusBarView()
+            StatusBarView(expanded: $statusExpanded)
 
             searchBar
 

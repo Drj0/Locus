@@ -18,6 +18,10 @@ enum LocalDevVPN {
     /// user-configurable (its default moved from 10.7.0.0 to 10.7.1.1), and other
     /// loopback VPNs (ClashMi / sing-box) use their own subnets.
     static var isConnected: Bool {
+        #if DEBUG
+        // Simulator preview of the connected UI: launch with `-LocusPreviewVPNConnected YES`.
+        if UserDefaults.standard.bool(forKey: "LocusPreviewVPNConnected") { return true }
+        #endif
         let target = TunnelConfig.targetIP
         guard let source = routedSourceAddress(to: target), source != target else { return false }
         return ipv4Interfaces().contains { $0.name.hasPrefix("utun") && $0.address == source }
