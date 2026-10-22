@@ -186,7 +186,7 @@ struct SetupFlowView: View {
                         .font(.system(size: 48, weight: .bold, design: .rounded))
                         .tracking(-0.5)
 
-                    Text("Teleport your location.\nNo computer required.")
+                    Text(supportsOnDevicePairing ? "Teleport your location.\nNo computer required." : "Teleport your location.")
                         .font(.title3)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)

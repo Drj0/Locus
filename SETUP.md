@@ -6,6 +6,10 @@ Install the latest IPA from [Releases](https://github.com/ChrisMack32/Locus/rele
 
 Bundle ID: `com.chrismack.locus`
 
+### No computer?
+
+There is no TestFlight or App Store build. Without a computer you need an on-device installer that is already set up, e.g. Feather with your own signing certificate, or LiveContainer. Pairing is computer-free only on iOS 27 (see below); on iOS 18–26 the RPPairing file must be generated once on any Mac / Windows / Linux computer.
+
 ### LiveContainer
 
 File pickers often break inside LiveContainer. Do one of the following:
