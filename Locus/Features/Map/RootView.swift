@@ -276,23 +276,16 @@ struct BottomControlsView: View {
                 trayIcon("star.fill") { showPlaces = true }
                     .accessibilityLabel("Places")
 
-                // Current travel mode; tap to choose another.
+                // More options: opens the travel-mode picker.
                 Button {
                     withAnimation(.snappy) { showModes.toggle() }
                 } label: {
-                    // Chevron signals the picker it opens; flips while open.
-                    HStack(spacing: 4) {
-                        Image(systemName: session.travelMode.icon)
-                            .font(.body.weight(.semibold))
-                        Image(systemName: "chevron.up")
-                            .font(.caption2.weight(.bold))
-                            .rotationEffect(.degrees(showModes ? 180 : 0))
-                    }
-                    .foregroundStyle(showModes ? .black : .primary)
-                    .padding(.horizontal, 12)
-                    .frame(height: 44)
-                    .background(Capsule().fill(showModes ? LocusTheme.accent : Color.primary.opacity(0.08)))
-                    .contentShape(Capsule())
+                    Image(systemName: "ellipsis")
+                        .font(.body.weight(.bold))
+                        .foregroundStyle(showModes ? .black : .primary)
+                        .frame(width: 44, height: 44)
+                        .background(Circle().fill(showModes ? LocusTheme.accent : Color.primary.opacity(0.08)))
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Travel mode")
