@@ -16,7 +16,7 @@ Free and open-source iPhone location teleport. Tap the map, search a place, or d
 - Walk/Drive routing on real roads & footpaths (MapKit)
 - Draw a path or import / export GPX
 - Background keep-alive + live status bar + drop alerts
-- Favorites & recents
+- Favorites, recents & recent searches (tap the search bar; star one to save it)
 - First-run setup walkthrough
 - Fully on-device — no analytics, nothing uploaded
 

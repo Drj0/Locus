@@ -81,6 +81,8 @@ final class SpoofSession: ObservableObject {
 
     @Published var favorites: [SavedPlace] = []
     @Published var recents: [SavedPlace] = []
+    /// Places picked from search, newest first, for quick re-selection.
+    @Published var recentSearches: [SavedPlace] = []
 
     private var resendTimer: Timer?
     private var healthTimer: Timer?
@@ -92,10 +94,12 @@ final class SpoofSession: ObservableObject {
 
     private let favoritesKey = "locus.favorites"
     private let recentsKey = "locus.recents"
+    private let recentSearchesKey = "locus.recentSearches"
 
     init() {
         favorites = SavedPlace.load(key: favoritesKey)
         recents = SavedPlace.load(key: recentsKey)
+        recentSearches = SavedPlace.load(key: recentSearchesKey)
     }
 
     var isSpoofing: Bool {
@@ -246,6 +250,33 @@ final class SpoofSession: ObservableObject {
     func removeFavorite(_ place: SavedPlace) {
         favorites.removeAll { $0.id == place.id }
         SavedPlace.save(favorites, key: favoritesKey)
+    }
+
+    func isFavorite(_ place: SavedPlace) -> Bool {
+        favorites.contains { $0.id == place.id }
+    }
+
+    func toggleFavorite(_ place: SavedPlace) {
+        if isFavorite(place) {
+            removeFavorite(place)
+        } else {
+            addFavorite(name: place.name, coordinate: place.coordinate)
+        }
+    }
+
+    func pushRecentSearch(name: String, coordinate: CLLocationCoordinate2D) {
+        let place = SavedPlace(name: name, latitude: coordinate.latitude, longitude: coordinate.longitude)
+        recentSearches.removeAll {
+            abs($0.latitude - place.latitude) < 0.00015 && abs($0.longitude - place.longitude) < 0.00015
+        }
+        recentSearches.insert(place, at: 0)
+        if recentSearches.count > 8 { recentSearches = Array(recentSearches.prefix(8)) }
+        SavedPlace.save(recentSearches, key: recentSearchesKey)
+    }
+
+    func clearRecentSearches() {
+        recentSearches.removeAll()
+        SavedPlace.save(recentSearches, key: recentSearchesKey)
     }
 
     func removeRecent(_ place: SavedPlace) {

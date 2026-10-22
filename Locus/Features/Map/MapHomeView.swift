@@ -170,6 +170,8 @@ struct MapHomeView: View {
 
             if !searchText.isEmpty && !search.results.isEmpty {
                 searchResults
+            } else if searchFocused && searchText.isEmpty && !session.recentSearches.isEmpty {
+                recentSearchesList
             }
 
             HStack(alignment: .center, spacing: 10) {
@@ -241,6 +243,57 @@ struct MapHomeView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                Divider().opacity(0.3)
+            }
+        }
+        .locusGlass(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private var recentSearchesList: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Recent searches")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Clear") { session.clearRecentSearches() }
+                    .font(.caption.weight(.semibold))
+                    .buttonStyle(.plain)
+                    .foregroundStyle(LocusTheme.accent)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, 4)
+
+            ForEach(session.recentSearches.prefix(5)) { place in
+                HStack(spacing: 8) {
+                    Button {
+                        select(recent: place)
+                    } label: {
+                        Label(place.name, systemImage: "clock.arrow.circlepath")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 10)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+
+                    let isFavorite = session.isFavorite(place)
+                    Button {
+                        session.toggleFavorite(place)
+                    } label: {
+                        Image(systemName: isFavorite ? "star.fill" : "star")
+                            .foregroundStyle(isFavorite ? LocusTheme.accent : .secondary)
+                            .frame(width: 36, height: 36)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(isFavorite ? "Remove from Favorites" : "Save to Favorites")
+                }
+                .padding(.horizontal, 12)
                 Divider().opacity(0.3)
             }
         }
@@ -348,11 +401,19 @@ struct MapHomeView: View {
                     searchText = ""
                     search.query = ""
                     searchFocused = false
-                    session.addFavorite(name: title, coordinate: coord)
+                    session.pushRecentSearch(name: title, coordinate: coord)
                     session.pushNamedRecent(name: title, coordinate: coord)
                 }
             }
         }
+    }
+
+    private func select(recent place: SavedPlace) {
+        session.pin = place.coordinate
+        pinPlaceName = place.name
+        position = .region(MKCoordinateRegion(center: place.coordinate, latitudinalMeters: 1200, longitudinalMeters: 1200))
+        searchFocused = false
+        session.pushRecentSearch(name: place.name, coordinate: place.coordinate)
     }
 
     private func buildRoadRoute() {
