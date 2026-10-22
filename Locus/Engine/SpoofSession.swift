@@ -288,6 +288,7 @@ final class SpoofSession: ObservableObject {
     }
 
     private func apply(_ coordinate: CLLocationCoordinate2D, pairing: PairingStore, markRecent: Bool) {
+        let wasActive = status == .active
         if status == .idle || status.isDropped {
             status = .connecting
         }
@@ -315,8 +316,9 @@ final class SpoofSession: ObservableObject {
         case .failure(let error):
             lastError = error.localizedDescription
             if simulated != nil {
-                // Health-check retries run as .reconnecting; only notify on the first drop.
-                if status != .reconnecting {
+                // Notify only when a live spoof drops. Retries (health check, joystick ticks,
+                // route steps) start from .dropped / .reconnecting and would otherwise repeat it.
+                if wasActive {
                     postDropNotification(error.localizedDescription)
                 }
                 status = .dropped(error.localizedDescription)
