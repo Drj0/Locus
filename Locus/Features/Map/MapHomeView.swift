@@ -147,7 +147,7 @@ struct MapHomeView: View {
                 onImportGPX: { showGPXImporter = true },
                 onExportGPX: exportGPX,
                 onUseDrawn: {
-                    routeCoords = RouteBuilder.sample(coordinates: drawnPath, every: 10)
+                    routeCoords = drawnPath
                     drawnPath.removeAll()
                     drawMode = false
                 }
@@ -462,7 +462,7 @@ struct MapHomeView: View {
                 // "Directions Not Available" (no road data for the region / travel mode) arrives as
                 // MKError.serverFailure, not .directionsNotFound, so fall back on any routing error.
                 await MainActor.run {
-                    routeCoords = RouteBuilder.sample(coordinates: [start, end], every: 10)
+                    routeCoords = [start, end]
                     isRouting = false
                     session.lastError = "\(error.localizedDescription). Using a straight line instead — draw a path or import a GPX file for a custom route."
                 }
@@ -471,7 +471,7 @@ struct MapHomeView: View {
     }
 
     private func playRoute() {
-        let path = routeCoords.isEmpty ? drawnPath : routeCoords
+        let path = routeCoords.isEmpty ? drawnPath : RouteBuilder.sample(coordinates: routeCoords, every: 10)
         guard path.count >= 2 else {
             session.lastError = "Build or draw a route first."
             return
@@ -483,7 +483,7 @@ struct MapHomeView: View {
     private func importGPX(_ url: URL) {
         do {
             let coords = try GPXCodec.parse(url)
-            routeCoords = RouteBuilder.sample(coordinates: coords, every: 10)
+            routeCoords = coords
             if let first = coords.first {
                 session.pin = first
                 position = .region(MKCoordinateRegion(center: first, latitudinalMeters: 2000, longitudinalMeters: 2000))

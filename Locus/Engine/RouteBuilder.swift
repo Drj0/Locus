@@ -19,15 +19,14 @@ enum RouteBuilder {
         guard let route = response.routes.first else {
             throw NSError(domain: "Locus", code: 1, userInfo: [NSLocalizedDescriptionKey: "No route found"])
         }
-        return sample(polyline: route.polyline, every: 12)
-    }
-
-    static func sample(polyline: MKPolyline, every meters: CLLocationDistance) -> [CLLocationCoordinate2D] {
+        let polyline = route.polyline
         var coords = [CLLocationCoordinate2D](repeating: .init(), count: polyline.pointCount)
         polyline.getCoordinates(&coords, range: NSRange(location: 0, length: polyline.pointCount))
-        return sample(coordinates: coords, every: meters)
+        return coords
     }
 
+    /// Densifies a path for playback. Routes are kept unsampled for drawing: extra points only
+    /// make the map overlay heavier, and followRoute interpolates between points anyway.
     static func sample(coordinates: [CLLocationCoordinate2D], every meters: CLLocationDistance) -> [CLLocationCoordinate2D] {
         guard coordinates.count > 1 else { return coordinates }
         var sampled = [coordinates[0]]
