@@ -65,12 +65,17 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    TextField("LocalDevVPN Device IP", text: $tunnelIP)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .onSubmit {
-                            TunnelConfig.setTargetIP(tunnelIP)
-                        }
+                    // A visible label: the placeholder alone disappears once an IP is filled in.
+                    LabeledContent("Device IP") {
+                        TextField(TunnelConfig.defaultIP, text: $tunnelIP)
+                            .multilineTextAlignment(.trailing)
+                            .keyboardType(.numbersAndPunctuation)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .onSubmit {
+                                TunnelConfig.setTargetIP(tunnelIP)
+                            }
+                    }
                     if LocalDevVPN.isOwnAddress(tunnelIP) {
                         Text("That’s this iPhone’s own address (LocalDevVPN’s Tunnel IP). Enter LocalDevVPN’s Device IP instead.")
                             .font(.footnote)
