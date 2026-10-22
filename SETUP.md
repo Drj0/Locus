@@ -35,7 +35,7 @@ File pickers often break inside LiveContainer. Do one of the following:
 
 ## 3. LocalDevVPN
 
-Install [LocalDevVPN](https://apps.apple.com/us/app/localdevvpn/id6755608044), connect it (default tunnel IP `10.7.0.1`).
+Install [LocalDevVPN](https://apps.apple.com/us/app/localdevvpn/id6755608044), connect it. In Locus → Settings → Tunnel, enter LocalDevVPN’s **Device IP** (default `10.7.0.1`), not its **Tunnel IP** (default `10.7.1.1`).
 
 ## 4. Teleport
 

@@ -13,9 +13,9 @@ enum LocationEngineError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidIP: return "Tunnel IP is invalid. Check Settings → Tunnel IP (usually 10.7.0.1)."
+        case .invalidIP: return "Device IP is invalid. Check Settings → Tunnel (use LocalDevVPN’s Device IP, usually 10.7.0.1)."
         case .pairingRead: return "Could not read the RPPairing file. Generate one with idevice_pair in RPPairing mode."
-        case .tunnelCreate: return "Could not open the developer tunnel. Is LocalDevVPN connected on Wi‑Fi?"
+        case .tunnelCreate: return "Could not open the developer tunnel. Is LocalDevVPN connected on Wi‑Fi, and does Settings → Tunnel match its Device IP (not its Tunnel IP)?"
         case .remoteServer: return "Connected to the tunnel but RemoteXPC handshake failed."
         case .simulationCreate: return "Could not open Apple’s location simulation service."
         case .locationSet: return "Failed to set simulated coordinates."

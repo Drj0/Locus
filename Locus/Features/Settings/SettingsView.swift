@@ -65,7 +65,7 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    TextField("Device tunnel IP", text: $tunnelIP)
+                    TextField("LocalDevVPN Device IP", text: $tunnelIP)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .onSubmit {
@@ -75,7 +75,7 @@ struct SettingsView: View {
                         Text(LocalDevVPN.isConnected ? "Connected" : "Not connected")
                             .foregroundStyle(LocalDevVPN.isConnected ? LocusTheme.statusGood : LocusTheme.statusWarn)
                     }
-                    Button("Save tunnel IP") {
+                    Button("Save Device IP") {
                         TunnelConfig.setTargetIP(tunnelIP)
                     }
                     Button {
@@ -93,7 +93,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Tunnel")
                 } footer: {
-                    Text("Connect LocalDevVPN before teleporting. Default tunnel IP is 10.7.0.1. Start a spoof on Wi‑Fi first; it can keep working on cellular afterward.")
+                    Text("Connect LocalDevVPN before teleporting. Enter LocalDevVPN’s Device IP (default 10.7.0.1), not its Tunnel IP (default 10.7.1.1). Start a spoof on Wi‑Fi first; it can keep working on cellular afterward.")
                 }
 
                 Section("Privacy") {
