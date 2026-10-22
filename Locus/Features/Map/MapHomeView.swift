@@ -419,6 +419,12 @@ struct MapHomeView: View {
                var top = scene.keyWindow?.rootViewController {
                 // Present above the Routes sheet, not from the root that is already presenting it.
                 while let presented = top.presentedViewController { top = presented }
+                // iPad shows the share sheet as a popover, which UIKit requires an anchor for.
+                if let popover = av.popoverPresentationController {
+                    popover.sourceView = top.view
+                    popover.sourceRect = CGRect(x: top.view.bounds.midX, y: top.view.bounds.midY, width: 0, height: 0)
+                    popover.permittedArrowDirections = []
+                }
                 top.present(av, animated: true)
             }
         } catch {
