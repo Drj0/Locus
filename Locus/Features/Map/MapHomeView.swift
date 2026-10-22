@@ -369,17 +369,13 @@ struct MapHomeView: View {
                     routeCoords = coords
                     isRouting = false
                 }
-            } catch let error as MKError where error.code == .directionsNotFound {
-                // Apple Maps has no road data for some regions / travel modes.
+            } catch {
+                // "Directions Not Available" (no road data for the region / travel mode) arrives as
+                // MKError.serverFailure, not .directionsNotFound, so fall back on any routing error.
                 await MainActor.run {
                     routeCoords = RouteBuilder.sample(coordinates: [start, end], every: 10)
                     isRouting = false
                     session.lastError = "\(error.localizedDescription). Using a straight line instead — draw a path or import a GPX file for a custom route."
-                }
-            } catch {
-                await MainActor.run {
-                    isRouting = false
-                    session.lastError = error.localizedDescription
                 }
             }
         }
