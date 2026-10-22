@@ -15,6 +15,8 @@
 		39FCB8C0E7050B9161E600C6 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E1C1367D937C33DF4F1FBE6 /* SettingsView.swift */; };
 		3F84179EF76E8AA074797361 /* SavedPlace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 799094E9B1F051BEAD82D2C1 /* SavedPlace.swift */; };
 		41622C4D112CF14318210A71 /* PairOnDeviceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2BC5277FD75A01A31B9830D /* PairOnDeviceService.swift */; };
+		42804574A98DA79255C30E87 /* PlacesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D20AA20ACD422495EDA6D2 /* PlacesView.swift */; };
+		48484CB764C735450C339D3B /* PlaceRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9BA3E2215160D7993398F19 /* PlaceRow.swift */; };
 		4A19A245C3B57EB4E5B02CDE /* DeviceTunnel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91E2EBD3F6F937176E4EC13F /* DeviceTunnel.swift */; };
 		74A5BCF6953128864737A070 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2D4CA41C622A34E45EF21F54 /* Assets.xcassets */; };
 		824D08C2AC8FD477F58DE51F /* LocalDevVPN.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFAD463F53BD704A35A8E65F /* LocalDevVPN.swift */; };
@@ -52,10 +54,12 @@
 		799094E9B1F051BEAD82D2C1 /* SavedPlace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedPlace.swift; sourceTree = "<group>"; };
 		8EA9F9A2A821575AEE768E67 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		91E2EBD3F6F937176E4EC13F /* DeviceTunnel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTunnel.swift; sourceTree = "<group>"; };
+		A9BA3E2215160D7993398F19 /* PlaceRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceRow.swift; sourceTree = "<group>"; };
 		AD401B2BF295561897BDABE6 /* PairableHostAdvertiser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairableHostAdvertiser.swift; sourceTree = "<group>"; };
 		AEFB9A10F8784355D5344D95 /* Locus.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Locus.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BE84038C9223A84BAFFAE233 /* PairOnDeviceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairOnDeviceView.swift; sourceTree = "<group>"; };
 		BFAD463F53BD704A35A8E65F /* LocalDevVPN.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalDevVPN.swift; sourceTree = "<group>"; };
+		C2D20AA20ACD422495EDA6D2 /* PlacesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlacesView.swift; sourceTree = "<group>"; };
 		C6C3F15BC482A2CBF13B1EA6 /* SpoofSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpoofSession.swift; sourceTree = "<group>"; };
 		CFF6D1EA6EBAAF543339FF81 /* JoystickPad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JoystickPad.swift; sourceTree = "<group>"; };
 		D76779E56819A74B78236EF1 /* RoutePlannerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutePlannerSheet.swift; sourceTree = "<group>"; };
@@ -125,11 +129,21 @@
 			children = (
 				36D52643D1CA99DF029BE655 /* Joystick */,
 				2C7F6D726AC574C9600B5F9A /* Map */,
+				76FD3C310650B5D6611FDAAA /* Places */,
 				B8E755C6C753821B2A8E141A /* Routes */,
 				04819CB404D166B850594890 /* Settings */,
 				8A34AD0FBFBBBC1E8E32A474 /* Setup */,
 			);
 			path = Features;
+			sourceTree = "<group>";
+		};
+		76FD3C310650B5D6611FDAAA /* Places */ = {
+			isa = PBXGroup;
+			children = (
+				A9BA3E2215160D7993398F19 /* PlaceRow.swift */,
+				C2D20AA20ACD422495EDA6D2 /* PlacesView.swift */,
+			);
+			path = Places;
 			sourceTree = "<group>";
 		};
 		796058090ADB9656F1AC489F = {
@@ -300,6 +314,8 @@
 				83D63478BF012E572D329843 /* PairableHostAdvertiser.swift in Sources */,
 				2D719677D77D851D73D2BA60 /* PairingDocumentPicker.swift in Sources */,
 				AC1BBA0F82E89EB56800992E /* PairingStore.swift in Sources */,
+				48484CB764C735450C339D3B /* PlaceRow.swift in Sources */,
+				42804574A98DA79255C30E87 /* PlacesView.swift in Sources */,
 				B10A777C5622EE884A890643 /* RootView.swift in Sources */,
 				8EAFB147F0F0E2AAE207D276 /* RouteBuilder.swift in Sources */,
 				87B0D41458D6AF0D39C9AAA4 /* RoutePlannerSheet.swift in Sources */,
