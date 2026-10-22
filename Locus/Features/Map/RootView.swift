@@ -37,7 +37,7 @@ struct RootView: View {
         }
         .alert("Locus", isPresented: Binding(
             get: { session.lastError != nil },
-            set: { if !$0 { session.lastError = nil } }
+            set: { _ in }  // OK clears lastError; writing it here would publish during a view update
         )) {
             Button("OK", role: .cancel) { session.lastError = nil }
         } message: {
@@ -62,9 +62,10 @@ final class TunnelMonitor: ObservableObject {
         if installed != self.installed { self.installed = installed }
     }
 
-    /// Something the user must act on: no tunnel, or the spoof dropped.
+    /// Something the user must act on: no tunnel, or the spoof dropped. `.reconnecting` counts
+    /// too: the health check alternates it with `.dropped`, which would otherwise flicker the banner.
     func needsAttention(_ status: SpoofStatus) -> Bool {
-        !connected || status.isDropped
+        !connected || status.isDropped || status == .reconnecting
     }
 }
 
@@ -101,22 +102,26 @@ extension View {
 }
 
 /// Full-width, tinted: shown only when the tunnel is off or the spoof dropped.
+/// Amber for VPN off (a running spoof keeps working for a while without it); red for a drop.
 struct VPNAttentionBanner: View {
     @EnvironmentObject private var session: SpoofSession
     @ObservedObject var monitor: TunnelMonitor
     @Binding var expanded: Bool
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    private var tint: Color { session.status.isDropped ? LocusTheme.statusBad : LocusTheme.statusWarn }
+    private var dropped: Bool { monitor.connected }
+
+    private var tint: Color { dropped ? LocusTheme.statusBad : LocusTheme.statusWarn }
 
     private var title: String {
-        monitor.connected ? "Location spoof dropped" : "LocalDevVPN is off"
+        dropped ? "Location spoof dropped" : "LocalDevVPN is off"
     }
 
     private var subtitle: String {
-        if !monitor.connected {
-            return session.isSpoofing ? "Spoofing paused — reconnect to resume" : "Connect it to teleport"
+        if !dropped {
+            return session.simulated == nil ? "Connect it to teleport" : "Connect it to move or change location"
         }
-        return "Locus keeps retrying · tap for details"
+        return session.status == .reconnecting ? "Reconnecting…" : "Locus keeps retrying · tap for details"
     }
 
     var body: some View {
@@ -125,10 +130,11 @@ struct VPNAttentionBanner: View {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { expanded.toggle() }
             } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: "exclamationmark.shield.fill")
+                    Image(systemName: dropped ? "exclamationmark.shield.fill" : "shield.slash.fill")
                         .font(.title3)
                         .foregroundStyle(tint)
-                        .symbolEffect(.pulse, options: .repeating, isActive: !expanded)
+                        // Only a drop pulses; "VPN off" stays still.
+                        .symbolEffect(.pulse, options: .repeating, isActive: dropped && !expanded)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(title)
                             .font(.subheadline.weight(.semibold))
@@ -137,7 +143,8 @@ struct VPNAttentionBanner: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    .lineLimit(1)
+                    // One line normally; wrap at accessibility sizes instead of truncating.
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
                     .minimumScaleFactor(0.85)
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.down")
@@ -175,21 +182,35 @@ struct VPNAttentionBanner: View {
     }
 }
 
-/// Icon-only: shown beside the locate button while the tunnel is fine.
+/// Icon-only: shown beside the locate button while the tunnel is fine. Outline when idle,
+/// filled green while spoofing, pulsing amber while a teleport starts.
 struct VPNStatusChip: View {
     @EnvironmentObject private var session: SpoofSession
     @Binding var expanded: Bool
 
-    private var isBusy: Bool {
-        session.status == .connecting || session.status == .reconnecting
+    private var isBusy: Bool { session.status == .connecting }
+
+    private var symbol: String {
+        switch session.status {
+        case .active: return "checkmark.shield.fill"
+        case .connecting: return "shield.fill"
+        default: return "checkmark.shield"
+        }
+    }
+
+    private var tint: Color {
+        switch session.status {
+        case .active: return LocusTheme.statusGood
+        case .connecting: return LocusTheme.statusWarn
+        default: return .secondary
+        }
     }
 
     private var label: String {
         switch session.status {
         case .active: return "LocalDevVPN connected, spoofing"
         case .connecting: return "LocalDevVPN connected, starting spoof"
-        case .reconnecting: return "LocalDevVPN connected, reconnecting spoof"
-        default: return "LocalDevVPN connected"
+        default: return "LocalDevVPN connected, not spoofing"
         }
     }
 
@@ -197,10 +218,11 @@ struct VPNStatusChip: View {
         Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { expanded.toggle() }
         } label: {
-            Image(systemName: isBusy ? "shield.fill" : "checkmark.shield.fill")
+            Image(systemName: symbol)
                 .font(.body.weight(.semibold))
-                .foregroundStyle(isBusy ? LocusTheme.statusWarn : LocusTheme.statusGood)
+                .foregroundStyle(tint)
                 .symbolEffect(.pulse, options: .repeating, isActive: isBusy)
+                .contentTransition(.symbolEffect(.replace))
                 .frame(width: 48, height: 48)
                 .contentShape(Circle())
         }
