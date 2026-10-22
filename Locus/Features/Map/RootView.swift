@@ -52,10 +52,13 @@ final class TunnelMonitor: ObservableObject {
     @Published private(set) var connected = LocalDevVPN.isConnected
     @Published private(set) var installed = LocalDevVPN.isInstalled
 
-    func refresh() {
+    /// `includeInstall` asks LaunchServices (an IPC round trip) whether LocalDevVPN is installed,
+    /// which can only change while Locus is in the background, so the 2 s poll skips it.
+    func refresh(includeInstall: Bool = false) {
         let connected = LocalDevVPN.isConnected
-        let installed = LocalDevVPN.isInstalled
         if connected != self.connected { self.connected = connected }
+        guard includeInstall else { return }
+        let installed = LocalDevVPN.isInstalled
         if installed != self.installed { self.installed = installed }
     }
 
@@ -72,9 +75,9 @@ private struct TunnelMonitoring: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .onAppear { monitor.refresh() }
+            .onAppear { monitor.refresh(includeInstall: true) }
             .onChange(of: scenePhase) { _, phase in
-                if phase == .active { monitor.refresh() }
+                if phase == .active { monitor.refresh(includeInstall: true) }
             }
             .onChange(of: status) { _, _ in monitor.refresh() }
             .onReceive(NotificationCenter.default.publisher(for: .NEVPNStatusDidChange)) { _ in
